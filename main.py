@@ -8,8 +8,8 @@ EXIT_COMMANDS = ('exit', 'quit', 'bye', 'goodbye', 'end', 'leave', 'kill', 'q')
 KEY = 'key'
 SECRET = 'secret'
 
-consumer_file = 'consumerkeys.txt'
-oauth_token_file = 'oauthconfig.txt'
+consumer_file = 'secrets/consumerkeys.txt'
+oauth_token_file = 'secrets/oauthconfig.txt'
 
 consumer_key = ""
 consumer_secret = ""
