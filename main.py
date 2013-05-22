@@ -4,9 +4,7 @@ import json
 import signal
 import twitter
 
-from tweet import Tweet, TweetEncoder, UnicodeException
-
-unicode_characters_encountered = []
+from tweet import Tweet, TweetEncoder
 
 class FileFormatException(Exception):
 	def __str__(self):
@@ -79,8 +77,6 @@ def pull_top_tweets_for_user(api, username, n, top_count):
 	assert(username)
 	assert(top_count <= n)
 
-	global unicode_characters_encountered
-
 	try:
 		statuses = api.GetUserTimeline(username, count=n+1)
 	except twitter.TwitterError as e:
@@ -93,13 +89,7 @@ def pull_top_tweets_for_user(api, username, n, top_count):
 	if not statuses:
 		return None
 
-	tweets = None
-	try:
-		tweets = sorted([Tweet(username, x) for x in statuses], key=lambda s: s.retweet_count, reverse=True)[:top_count]
-	except UnicodeException as e:
-		unicode_characters_encountered.extend(e.uchars)
-		print str(e)
-		return None
+	tweets = sorted([Tweet(username, x) for x in statuses], key=lambda s: s.retweet_count, reverse=True)[:top_count]
 
 	return tweets
 
@@ -132,9 +122,6 @@ def main():
 	print "Writing tweet data to {}...".format(output_file)
 
 	write_tweets(output_file, tweets)
-
-	if unicode_characters_encountered:
-		print "Encountered these unicode characters: {}".format(unicode_characters_encountered)
 
 if __name__ == "__main__":
 	main()
