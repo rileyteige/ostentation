@@ -10,15 +10,24 @@ unicode_backslash_pattern = "(\\\\u[\da-fA-F]{4})"
 r_terms = re.compile('|'.join(itertools.chain([mention_pattern, hashtag_pattern, url_pattern])))
 r_words = re.compile("(\w\w*'?\w?\w?)")
 
+class UnicodeException(Exception):
+	def __init__(self, uchars):
+		super(UnicodeException, self).__init__()
+		self.uchars = uchars
+
+	def __str__(self):
+		return "Unicode characters found: {}".format(self.uchars)
+
 unicode_mappings = {
-	'\u263a': ':-)',
-	'\u2764': '<3',
+	'\u2014': '--',
 	'\u2018': '\'',
 	'\u2019': '\'',
 	'\u201c': '\"',
 	'\u201d': '\"',
 	'\u2026': '...',
-	'\u2014': '--',
+	'\u261d': '^^^',
+	'\u263a': ':-)',
+	'\u2764': '<3',
 	'&amp;': '&'
 }
 
@@ -31,19 +40,15 @@ def unicode_replace(str):
 
 	return str
 
-unicode_found = False
-
 class Tweet(object):
 	def __init__(self, username, name, status):
-		global unicode_found
 		self.created_on = dateutil.parser.parse(status.GetCreatedAt())
 		self.text = unicode_replace(status.GetText().encode('ascii', 'backslashreplace'))
 
 		unicode_matches = re.findall(unicode_backslash_pattern, self.text)
 		if unicode_matches:
-			unicode_found = True
-		for u in unicode_matches:
-			print "Unicode character found: {0}".format(u)
+			raise UnicodeException(unicode_matches)
+
 		self.mentions = re.findall(mention_pattern, self.text)
 		self.hashtags = re.findall(hashtag_pattern, self.text)
 		filtered_text = re.sub(r_terms, '', self.text)
@@ -53,14 +58,7 @@ class Tweet(object):
 		self.username = username
 		self.name = name
 
-	@staticmethod
-	def reset():
-		global unicode_found
-		unicode_found = False
-
 	def dump(self):
-		if unicode_found:
-			return
 		print "\tCreated On: {0}".format(self.created_on.strftime('%m/%d/%Y'))
 		print "\tName: {0} ({1})".format(self.name, self.username)
 		print "\tText: {0}".format(self.text)

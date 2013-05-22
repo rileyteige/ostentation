@@ -1,8 +1,24 @@
+#!/usr/bin/env python
 from bs4 import BeautifulSoup
+import errno
 import httplib
+import os
 import re
 
+def ensure_path(filepath):
+	paths = os.path.split(filepath)
+	if paths:
+		paths = paths[:-1]
+		filepath = os.path.join(paths)[0]
+
+	try:
+		os.makedirs(filepath)
+	except OSError as e:
+		if e.errno != errno.EEXIST:
+			raise
+
 def write_list_to_file(filename, l):
+	ensure_path(filename)
 	if not l:
 		print "Asked to write empty list to '{0}'... returning.".format(filename)
 		return
@@ -56,7 +72,7 @@ def main():
 		print "Scraping usernames from {0}...".format(domain + method)
 		users.extend(extract_usernames(get_html(domain, method)))
 
-	filename = 'top1000'
+	filename = 'assets/top1000.data'
 
 	print "Exporting usernames to {0}...".format(filename)
 	write_list_to_file(filename, users)

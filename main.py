@@ -1,112 +1,119 @@
+#!/usr/bin/env python
 import twitter
 import dateutil.parser
 import signal
 
 from tweet import Tweet
 
-EXIT_COMMANDS = ('exit', 'quit', 'bye', 'goodbye', 'end', 'leave', 'kill', 'q')
-KEY = 'key'
-SECRET = 'secret'
+class FileFormatException(Exception):
+	def __str__(self):
+		return "Bad file format in file '{}'".format(self.message)
 
-consumer_file = 'secrets/consumerkeys.txt'
-oauth_token_file = 'secrets/oauthconfig.txt'
-
-consumer_key = ""
-consumer_secret = ""
-oauth_token = ""
-oauth_secret = ""
+class UserException(Exception):
+	def __str__(self):
+		return "Failed to obtain user data for username: {}".format(self.message)
 
 def ctrlc_handler(signum, frame):
 	print
 	exit(0)
 
-signal.signal(signal.SIGINT, ctrlc_handler)
+def read_lines_from_file(filename):
+	with open(filename) as f:
+		return f.readlines()
 
-with open(consumer_file) as f:
-	lines = f.readlines()
+def get_secrets(filename):
+	KEY = 'key'
+	SECRET = 'secret'
+
+	key = None
+	secret = None
+
+	lines = read_lines_from_file(filename)
 	for l in lines:
-		try:
-			pair = l.split('=')
-			key, value = pair[0], pair[1]
-			if key == KEY:
-				consumer_key = value
-			elif key == SECRET:
-				consumer_secret = value
-			else:
-				raise Exception()
-		except:
-			print "Bad file format in file {0}.".format(consumer_file)
-			exit(1)
+		pair = l.split('=')
+		k, v = pair[0], pair[1]
+		if k == KEY:
+			key = v
+		elif k == SECRET:
+			secret = v
+		else:
+			raise FileFormatException(filename)
 
-with open(oauth_token_file) as f:
-	lines = f.readlines()
-	for l in lines:
-		try:
-			pair = l.split('=')
-			key, value = pair[0], pair[1]
-			if key == KEY:
-				oauth_token = value
-			elif key == SECRET:
-				oauth_secret = value
-			else:
-				raise Exception()
-		except:
-			print "Bad file format in file {0}.".format(oauth_token_file)
-			exit(1)
+	if not (key and secret):
+		raise FileFormatException(filename)
 
-if consumer_key == "" or consumer_secret == "":
-	raise Exception("Missing consumer OAuth values.")
+	return key, secret
 
-if oauth_token == "" or oauth_secret == "":
-	raise Exception("Missing OAuth token values.")
+def load_twitter(consumer_file, oauth_token_file):
+	consumer_key, consumer_secret = get_secrets(consumer_file)
+	oauth_key, oauth_secret = get_secrets(oauth_token_file)
 
-api = twitter.Api(consumer_key=consumer_key, consumer_secret=consumer_secret, access_token_key=oauth_token, access_token_secret=oauth_secret)
+	assert(consumer_key and consumer_secret)
+	assert(oauth_key and oauth_secret)
 
-username = ""
+	return twitter.Api(consumer_key=consumer_key, consumer_secret=consumer_secret, access_token_key=oauth_key, access_token_secret=oauth_secret)
 
-while True:
+def load_users(user_file, n):
+	lines = []
+	try:
+		lines = read_lines_from_file(user_file)
+	except:
+		print "Could not read user data from {}".format(user_file)
 
-	username = raw_input('Enter a username: ')
+	if not lines:
+		return None
 
-	Tweet.reset()
+	return [x.rstrip() for x in lines[:n]]
 
-	if username.lower() in EXIT_COMMANDS:
-		break
-
-	print ""
-
-	print "Getting user info for username '{0}'...\n".format(username)
+def pull_top_tweets_for_user(api, username, n, top_count):
+	assert(api)
+	assert(username)
+	assert(top_count <= n)
 
 	try:
 		u = api.GetUser(username)
 	except:
-		print "An exception occurred getting user info."
-		continue
-
-	print "Got info for username '{0}'.\n".format(username)
+		print "An exception occurred getting user info for username: {}".format(username)
+		return None
 
 	name = u.GetName().encode('utf8', 'ignore')
 
-	print "Name: {0}".format(name)
-	print "Location: {0}".format(u.GetLocation().encode('utf8', 'ignore'))
-	print "Description: {0}".format(u.GetDescription().encode('utf8', 'ignore'))
-	print "# Followers: {0}".format(u.GetFollowersCount())
-	print "URL: {0}\n".format(u.GetUrl().encode('utf8', 'ignore'))
-
-	num_statuses_checked = 1000
-	num_statuses_shown = 10
-
-	assert(num_statuses_shown <= num_statuses_checked)
-
-	print "{0} most retweeted of the last {1} statuses for {2}".format(num_statuses_shown, num_statuses_checked, name)
-
 	try:
-		statuses = api.GetUserTimeline(username, count=num_statuses_checked + 1)
+		statuses = api.GetUserTimeline(username, count=n+1)
 	except:
 		print "An exception occurred getting status info."
-		continue
+		return None
 
-	for s in sorted([Tweet(username, name, x) for x in statuses], key=lambda s: s.retweet_count, reverse=True)[:num_statuses_shown]:
-		print ""
-		s.dump()
-		print ""
+	tweets = None
+	try:
+		tweets = sorted([Tweet(username, name, x) for x in statuses], key=lambda s: s.retweet_count, reverse=True)[:top_count]
+	except Exception as e:
+		print str(e)
+		return None
+
+	return tweets
+
+def main():
+	signal.signal(signal.SIGINT, ctrlc_handler)
+
+	consumer_file = 'secrets/consumerkeys.txt'
+	oauth_token_file = 'secrets/oauthconfig.txt'
+	user_file = 'assets/top1000.data'
+
+	api = load_twitter(consumer_file, oauth_token_file)
+
+	num_users = 3
+	users = load_users(user_file, num_users)
+
+	for username in users:
+		num_tweets = 10
+		top_count = 3
+		user_tweets = pull_top_tweets_for_user(api, username, num_tweets, top_count)
+
+		if user_tweets:
+			print "Successfully obtained user data for username: {}".format(username)
+		else:
+			raise UserException(username)
+
+if __name__ == "__main__":
+	main()

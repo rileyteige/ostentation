@@ -1,8 +1,8 @@
 # OAuth secrets
 secrets/*
 
-# Top users
-top1000
+# Assets
+assets/*
 
 # Temporaries
 *.pyc
