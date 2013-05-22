@@ -1,6 +1,9 @@
+import datetime
 import dateutil.parser
 import itertools
 import re
+import simplejson as json
+import time
 
 mention_pattern = "(@\w+)"
 hashtag_pattern = "(#\w+)"
@@ -40,8 +43,17 @@ def unicode_replace(str):
 
 	return str
 
+class TweetEncoder(json.JSONEncoder):
+	def default(self, obj):
+		if isinstance(obj, datetime.datetime):
+			return int(time.mktime(obj.timetuple()))
+		elif not isinstance(obj, Tweet):
+			return super(TweetEncoder, self).default(obj)
+
+		return obj.__dict__
+
 class Tweet(object):
-	def __init__(self, username, name, status):
+	def __init__(self, username, status):
 		self.created_on = dateutil.parser.parse(status.GetCreatedAt())
 		self.text = unicode_replace(status.GetText().encode('ascii', 'backslashreplace'))
 
@@ -56,11 +68,10 @@ class Tweet(object):
 		self.words = r_words.findall(filtered_text)
 		self.retweet_count = status.GetRetweetCount()
 		self.username = username
-		self.name = name
 
 	def dump(self):
 		print "\tCreated On: {0}".format(self.created_on.strftime('%m/%d/%Y'))
-		print "\tName: {0} ({1})".format(self.name, self.username)
+		print "\Username: {0} ({1})".format(self.username)
 		print "\tText: {0}".format(self.text)
 		print "\tWords: {0}".format(self.words)
 		print "\tMentions: {0}".format(self.mentions)

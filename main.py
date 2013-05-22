@@ -1,9 +1,12 @@
 #!/usr/bin/env python
-import twitter
 import dateutil.parser
+import json
 import signal
+import twitter
 
-from tweet import Tweet
+from tweet import Tweet, TweetEncoder, UnicodeException
+
+unicode_characters_encountered = []
 
 class FileFormatException(Exception):
 	def __str__(self):
@@ -15,7 +18,8 @@ class UserException(Exception):
 
 def ctrlc_handler(signum, frame):
 	print
-	exit(0)
+	print "Control-C was pressed."
+	exit()
 
 def read_lines_from_file(filename):
 	with open(filename) as f:
@@ -65,55 +69,72 @@ def load_users(user_file, n):
 
 	return [x.rstrip() for x in lines[:n]]
 
+def write_tweets(output_file, tweets):
+	data = json.dumps(tweets, cls=TweetEncoder)
+	with open(output_file, 'w') as f:
+		f.write(data)
+
 def pull_top_tweets_for_user(api, username, n, top_count):
 	assert(api)
 	assert(username)
 	assert(top_count <= n)
 
-	try:
-		u = api.GetUser(username)
-	except:
-		print "An exception occurred getting user info for username: {}".format(username)
-		return None
-
-	name = u.GetName().encode('utf8', 'ignore')
+	global unicode_characters_encountered
 
 	try:
 		statuses = api.GetUserTimeline(username, count=n+1)
+	except twitter.TwitterError as e:
+		print "Twitter exception occurred: {}".format(e)
+		exit(1)
 	except:
 		print "An exception occurred getting status info."
 		return None
 
+	if not statuses:
+		return None
+
 	tweets = None
 	try:
-		tweets = sorted([Tweet(username, name, x) for x in statuses], key=lambda s: s.retweet_count, reverse=True)[:top_count]
-	except Exception as e:
+		tweets = sorted([Tweet(username, x) for x in statuses], key=lambda s: s.retweet_count, reverse=True)[:top_count]
+	except UnicodeException as e:
+		unicode_characters_encountered.extend(e.uchars)
 		print str(e)
 		return None
 
 	return tweets
 
 def main():
+	NUM_USERS = 100
+	NUM_TWEETS_PER_USER = 100
+	TOP_TWEETS_PER_USER = 25
+
 	signal.signal(signal.SIGINT, ctrlc_handler)
 
 	consumer_file = 'secrets/consumerkeys.txt'
 	oauth_token_file = 'secrets/oauthconfig.txt'
 	user_file = 'assets/top1000.data'
+	output_file = 'assets/tweets.json'
 
 	api = load_twitter(consumer_file, oauth_token_file)
 
-	num_users = 3
-	users = load_users(user_file, num_users)
+	users = load_users(user_file, NUM_USERS)
+	tweets = []
 
 	for username in users:
-		num_tweets = 10
-		top_count = 3
-		user_tweets = pull_top_tweets_for_user(api, username, num_tweets, top_count)
+		user_tweets = pull_top_tweets_for_user(api, username, NUM_TWEETS_PER_USER, TOP_TWEETS_PER_USER)
 
 		if user_tweets:
 			print "Successfully obtained user data for username: {}".format(username)
+			tweets.extend(user_tweets)
 		else:
-			raise UserException(username)
+			print "Failed to obtain user data for username: {}".format(username)
+
+	print "Writing tweet data to {}...".format(output_file)
+
+	write_tweets(output_file, tweets)
+
+	if unicode_characters_encountered:
+		print "Encountered these unicode characters: {}".format(unicode_characters_encountered)
 
 if __name__ == "__main__":
 	main()
