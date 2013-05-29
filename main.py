@@ -12,7 +12,8 @@ class FileFormatException(Exception):
 
 class UserException(Exception):
 	def __str__(self):
-		return "Failed to obtain user data for username: {}".format(self.message)
+		return "Failed to obtain user data for username: {}"\
+					.format(self.message)
 
 def ctrlc_handler(signum, frame):
 	print
@@ -53,7 +54,11 @@ def load_twitter(consumer_file, oauth_token_file):
 	assert(consumer_key and consumer_secret)
 	assert(oauth_key and oauth_secret)
 
-	return twitter.Api(consumer_key=consumer_key, consumer_secret=consumer_secret, access_token_key=oauth_key, access_token_secret=oauth_secret)
+	return twitter.Api(consumer_key=consumer_key,\
+						consumer_secret=consumer_secret,\
+						access_token_key=oauth_key,\
+						access_token_secret=oauth_secret\
+					)
 
 def load_users(user_file, n):
 	lines = []
@@ -89,7 +94,9 @@ def pull_top_tweets_for_user(api, username, n, top_count):
 	if not statuses:
 		return None
 
-	tweets = sorted([Tweet(username, x) for x in statuses], key=lambda s: s.retweet_count, reverse=True)[:top_count]
+	tweets = sorted([Tweet(username, x) for x in statuses],\
+					key=lambda s: s.retweet_count,\
+					reverse=True)[:top_count]
 
 	return tweets
 
@@ -111,13 +118,20 @@ def main():
 	tweets = []
 
 	for username in users:
-		user_tweets = pull_top_tweets_for_user(api, username, NUM_TWEETS_PER_USER, TOP_TWEETS_PER_USER)
+		user_tweets = pull_top_tweets_for_user(\
+						api,\
+						username,\
+						NUM_TWEETS_PER_USER,\
+						TOP_TWEETS_PER_USER\
+					)
 
 		if user_tweets:
-			print "Successfully obtained user data for username: {}".format(username)
+			print "Successfully obtained user data for username: {}"\
+					.format(username)
 			tweets.extend(user_tweets)
 		else:
-			print "Failed to obtain user data for username: {}".format(username)
+			print "Failed to obtain user data for username: {}"\
+					.format(username)
 
 	print "Writing tweet data to {}...".format(output_file)
 
