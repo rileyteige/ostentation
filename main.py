@@ -5,7 +5,7 @@ import os
 import signal
 import twitter
 
-from tweet import Tweet, TweetEncoder
+from tweet import Tweet, TweetEncoder, WordMap
 
 class FileFormatException(Exception):
 	def __str__(self):
@@ -120,13 +120,14 @@ def pull_top_tweets_for_user(api, username, n, top_count):
 	return tweets
 
 def load_tweets(api, username_file, load_file):
-	NUM_USERS = 1
-	NUM_TWEETS_PER_USER = 3
-	TOP_TWEETS_PER_USER = 3
+	NUM_USERS = 25
+	NUM_TWEETS_PER_USER = 1000
+	TOP_TWEETS_PER_USER = 100
 
 	tweets = []
 
 	if not os.path.exists(load_file):
+		print "No tweet cache found. Downloading twitter data."
 		users = load_users(username_file, NUM_USERS)
 
 		for username in users:
@@ -158,6 +159,37 @@ def load_tweets(api, username_file, load_file):
 
 	return tweets
 
+def load_word_map(data_file):
+	if not os.path.exists(data_file):
+		return None
+
+	return WordMap.from_lines(read_lines_from_file(data_file))
+
+def score_tweets(tweets):
+	narcisistic_file = 'assets/narcissistic.txt'
+	selfless_file = 'assets/selfless.txt'
+
+	narcisistic = load_word_map(narcisistic_file)
+	selfless = load_word_map(selfless_file)
+
+	user_scores = {}
+	narc_scores = {}
+	self_scores = {}
+
+	for t in tweets:
+		name = t.username
+		if name not in user_scores:
+			user_scores[name] = 0
+			narc_scores[name] = 0
+			self_scores[name] = 0
+
+		words = t.words
+		user_scores[name] += narcisistic.score(words) - selfless.score(words)
+		narc_scores[name] += narcisistic.score(words)
+		self_scores[name] += selfless.score(words)
+
+	return user_scores
+
 def main():
 
 	signal.signal(signal.SIGINT, ctrlc_handler)
@@ -171,9 +203,10 @@ def main():
 	tweets = load_tweets(api, user_file, output_file)
 
 	if tweets:
-		for t in tweets:
-			print str(t)
-			t.dump()
+		scores = score_tweets(tweets)
+		print "In order from most narcisistic to least:"
+		for username in sorted(scores, key=scores.get, reverse=True):
+			print "{}".format(username, scores[username])
 	else:
 		print "An error occurred loading the tweets."
 

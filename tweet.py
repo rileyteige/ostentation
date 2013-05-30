@@ -21,9 +21,9 @@ r_words = rgx(word_pattern)
 
 def latin(expr):
 	if isinstance(expr, basestring):
-		return expr.encode('latin1', 'ignore')
+		return expr.encode('ascii', 'ignore')
 	elif isinstance(expr, list):
-		return [x.encode('latin1', 'ignore') for x in expr]
+		return [x.encode('ascii', 'ignore') for x in expr]
 
 class TweetEncoder(json.JSONEncoder):
 	def default(self, obj):
@@ -40,7 +40,7 @@ class Tweet(object):
 			return
 
 		self.created_on = dateutil.parser.parse(status.GetCreatedAt())
-		self.text = status.GetText().encode('latin1', 'ignore')
+		self.text = status.GetText().encode('ascii', 'ignore')
 
 		self.mentions = re.findall(mention_pattern, self.text)
 		self.hashtags = re.findall(hashtag_pattern, self.text)
@@ -86,6 +86,16 @@ class WordMap(object):
 	def __init__(self, words):
 		self.map = self._build_map(words)
 
+	@staticmethod
+	def from_lines(lines):
+		wordmap = WordMap(None)
+
+		word_lines = map(lambda x: r_words.findall(x), lines)
+		for l in word_lines:
+			wordmap.add_many_words(l)
+
+		return wordmap
+
 	def _build_map(self, words):
 		map = {}
 
@@ -103,6 +113,10 @@ class WordMap(object):
 			self.map[word] = n
 		else:
 			self.map[word] += n
+
+	def add_many_words(self, words):
+		for word in words:
+			self.add_word(word)
 
 	def join(self, wordmap):
 		for w in wordmap.map.keys():
