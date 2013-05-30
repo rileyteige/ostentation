@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 import dateutil.parser
 import json
+import os
 import signal
 import twitter
 
@@ -19,7 +20,25 @@ def ctrlc_handler(signum, frame):
 	print
 	print "Control-C was pressed."
 	exit()
+	for username in users:
+		user_tweets = pull_top_tweets_for_user(\
+						api,\
+						username,\
+						NUM_TWEETS_PER_USER,\
+						TOP_TWEETS_PER_USER\
+					)
 
+		if user_tweets:
+			print "Successfully obtained user data for username: {}"\
+					.format(username)
+			tweets.extend(user_tweets)
+		else:
+			print "Failed to obtain user data for username: {}"\
+					.format(username)
+
+	print "Writing tweet data to {}...".format(output_file)
+
+	write_tweets(output_file, tweets)
 def read_lines_from_file(filename):
 	with open(filename) as f:
 		return f.readlines()
@@ -100,10 +119,46 @@ def pull_top_tweets_for_user(api, username, n, top_count):
 
 	return tweets
 
+def load_tweets(api, username_file, load_file):
+	NUM_USERS = 1
+	NUM_TWEETS_PER_USER = 3
+	TOP_TWEETS_PER_USER = 3
+
+	tweets = []
+
+	if not os.path.exists(load_file):
+		users = load_users(username_file, NUM_USERS)
+
+		for username in users:
+			user_tweets = pull_top_tweets_for_user(\
+							api,\
+							username,\
+							NUM_TWEETS_PER_USER,\
+							TOP_TWEETS_PER_USER\
+						)
+
+			if user_tweets:
+				print "Successfully obtained user data for username: {}"\
+						.format(username)
+				tweets.extend(user_tweets)
+			else:
+				print "Failed to obtain user data for username: {}"\
+						.format(username)
+
+		print "Writing tweet data to {}...".format(load_file)
+
+		write_tweets(load_file, tweets)
+	else:
+		with open(load_file, 'r') as f:
+			json_data = f.read()
+			data = json.loads(json_data, encoding='latin1')
+			for d in data:
+				tweet = Tweet.from_dict(d)
+				tweets.append(tweet)
+
+	return tweets
+
 def main():
-	NUM_USERS = 100
-	NUM_TWEETS_PER_USER = 100
-	TOP_TWEETS_PER_USER = 25
 
 	signal.signal(signal.SIGINT, ctrlc_handler)
 
@@ -113,29 +168,14 @@ def main():
 	output_file = 'assets/tweets.json'
 
 	api = load_twitter(consumer_file, oauth_token_file)
+	tweets = load_tweets(api, user_file, output_file)
 
-	users = load_users(user_file, NUM_USERS)
-	tweets = []
-
-	for username in users:
-		user_tweets = pull_top_tweets_for_user(\
-						api,\
-						username,\
-						NUM_TWEETS_PER_USER,\
-						TOP_TWEETS_PER_USER\
-					)
-
-		if user_tweets:
-			print "Successfully obtained user data for username: {}"\
-					.format(username)
-			tweets.extend(user_tweets)
-		else:
-			print "Failed to obtain user data for username: {}"\
-					.format(username)
-
-	print "Writing tweet data to {}...".format(output_file)
-
-	write_tweets(output_file, tweets)
+	if tweets:
+		for t in tweets:
+			print str(t)
+			t.dump()
+	else:
+		print "An error occurred loading the tweets."
 
 if __name__ == "__main__":
 	main()
