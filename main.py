@@ -174,20 +174,14 @@ def score_tweets(tweets):
 	selfless = load_word_map(selfless_file)
 
 	user_scores = {}
-	narc_scores = {}
-	self_scores = {}
 
 	for t in tweets:
 		name = t.username
 		if name not in user_scores:
 			user_scores[name] = 0
-			narc_scores[name] = 0
-			self_scores[name] = 0
 
 		words = t.words
 		user_scores[name] += narcisistic.score(words) - selfless.score(words)
-		narc_scores[name] += narcisistic.score(words)
-		self_scores[name] += selfless.score(words)
 
 	return user_scores
 
