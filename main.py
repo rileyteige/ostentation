@@ -120,9 +120,9 @@ def pull_top_tweets_for_user(api, username, n, top_count):
 	return tweets
 
 def load_tweets(api, username_file, load_file):
-	NUM_USERS = 25
+	NUM_USERS = 150
 	NUM_TWEETS_PER_USER = 1000
-	TOP_TWEETS_PER_USER = 100
+	TOP_TWEETS_PER_USER = 250
 
 	tweets = []
 
@@ -150,6 +150,7 @@ def load_tweets(api, username_file, load_file):
 
 		write_tweets(load_file, tweets)
 	else:
+		print "Loading cached twitter data."
 		with open(load_file, 'r') as f:
 			json_data = f.read()
 			data = json.loads(json_data, encoding='latin1')
@@ -204,9 +205,28 @@ def main():
 
 	if tweets:
 		scores = score_tweets(tweets)
-		print "In order from most narcisistic to least:"
-		for username in sorted(scores, key=scores.get, reverse=True):
-			print "{}".format(username, scores[username])
+		ranked_users = sorted(scores, key=scores.get, reverse=True)
+		n = len(ranked_users)
+		BOUNDARY_SIZE = 10
+		i = 0
+		if n < BOUNDARY_SIZE * 2:
+			print "\nIn order from most narcissistic to least:\n"
+			for name in ranked_users:
+				i += 1
+				print "{}: {}".format(i, name)
+		else:
+			print "{} most narcissistic users:\n".format(BOUNDARY_SIZE)
+			for name in ranked_users[:BOUNDARY_SIZE]:
+				i += 1
+				print "{}: {}".format(i, name)
+
+			print "\n{} least narcissistic users:\n".format(BOUNDARY_SIZE)
+			i = 0
+			for name in reversed(ranked_users[-BOUNDARY_SIZE:]):
+				i += 1
+				print "{}: {}".format(i, name)
+
+
 	else:
 		print "An error occurred loading the tweets."
 
