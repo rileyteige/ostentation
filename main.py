@@ -3,6 +3,7 @@ import dateutil.parser
 import json
 import os
 import signal
+import sys
 import twitter
 
 from tweet import Tweet, TweetEncoder, WordMap
@@ -79,7 +80,7 @@ def load_twitter(consumer_file, oauth_token_file):
 						access_token_secret=oauth_secret\
 					)
 
-def load_users(user_file, n):
+def load_users(user_file, n, offset=0):
 	lines = []
 	try:
 		lines = read_lines_from_file(user_file)
@@ -89,7 +90,7 @@ def load_users(user_file, n):
 	if not lines:
 		return None
 
-	return [x.rstrip() for x in lines[:n]]
+	return [x.rstrip() for x in lines[offset:n+offset]]
 
 def write_tweets(output_file, tweets):
 	data = json.dumps(tweets, cls=TweetEncoder)
@@ -104,7 +105,7 @@ def pull_top_tweets_for_user(api, username, n, top_count):
 	try:
 		statuses = api.GetUserTimeline(username, count=n+1)
 	except twitter.TwitterError as e:
-		print "Twitter exception occurred: {}".format(e)
+		print "\nA Twitter exception occurred:\n{}".format(e)
 		exit(1)
 	except:
 		print "An exception occurred getting status info."
@@ -127,7 +128,9 @@ def load_tweets(api, username_file, load_file):
 	tweets = []
 
 	if not os.path.exists(load_file):
-		print "No tweet cache found. Downloading twitter data."
+		sys.stdout.write("Downloading twitter data " +\
+							"for {} users at {} tweets/user..."\
+							.format(NUM_USERS, TOP_TWEETS_PER_USER))
 		users = load_users(username_file, NUM_USERS)
 
 		for username in users:
@@ -139,24 +142,29 @@ def load_tweets(api, username_file, load_file):
 						)
 
 			if user_tweets:
-				print "Successfully obtained user data for username: {}"\
-						.format(username)
+				sys.stdout.write('.')
 				tweets.extend(user_tweets)
 			else:
-				print "Failed to obtain user data for username: {}"\
+				print "\nFailed to obtain user data for username: {}"\
 						.format(username)
 
-		print "Writing tweet data to {}...".format(load_file)
+		print "Saving tweet data in {}...".format(load_file)
 
 		write_tweets(load_file, tweets)
 	else:
-		print "Loading cached twitter data."
+		sys.stdout.write("Loading saved twitter data...")
 		with open(load_file, 'r') as f:
 			json_data = f.read()
 			data = json.loads(json_data, encoding='latin1')
+			i = 0
 			for d in data:
+				i += 1
+				if i % 2000 == 0:
+					sys.stdout.write('.')
+					i = 0
 				tweet = Tweet.from_dict(d)
 				tweets.append(tweet)
+			print "\nDone.\n"
 
 	return tweets
 
@@ -192,16 +200,19 @@ def main():
 	consumer_file = 'secrets/consumerkeys.txt'
 	oauth_token_file = 'secrets/oauthconfig.txt'
 	user_file = 'assets/top1000.data'
-	output_file = 'assets/tweets.json'
+	tweet_save_file = 'assets/tweets.json'
 
 	api = load_twitter(consumer_file, oauth_token_file)
-	tweets = load_tweets(api, user_file, output_file)
+	tweets = load_tweets(api, user_file, tweet_save_file)
+
+	print "Loaded {} tweets.".format(len(tweets))
 
 	if tweets:
+		print "Analyzing twitter data...\n"
 		scores = score_tweets(tweets)
 		ranked_users = sorted(scores, key=scores.get, reverse=True)
 		n = len(ranked_users)
-		BOUNDARY_SIZE = 10
+		BOUNDARY_SIZE = 5
 		i = 0
 		if n < BOUNDARY_SIZE * 2:
 			print "\nIn order from most narcissistic to least:\n"

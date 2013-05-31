@@ -25,6 +25,9 @@ def latin(expr):
 	elif isinstance(expr, list):
 		return [x.encode('ascii', 'ignore') for x in expr]
 
+def extract_words(line):
+	return r_words.findall(re.sub(r_terms, '', line))
+
 class TweetEncoder(json.JSONEncoder):
 	def default(self, obj):
 		if isinstance(obj, datetime.datetime):
@@ -41,12 +44,9 @@ class Tweet(object):
 
 		self.created_on = dateutil.parser.parse(status.GetCreatedAt())
 		self.text = status.GetText().encode('ascii', 'ignore')
-
 		self.mentions = re.findall(mention_pattern, self.text)
 		self.hashtags = re.findall(hashtag_pattern, self.text)
-		filtered_text = re.sub(r_terms, '', self.text)
-
-		self.words = r_words.findall(filtered_text)
+		self.words = extract_words(self.text)
 		self.retweet_count = status.GetRetweetCount()
 		self.username = username
 
@@ -90,7 +90,7 @@ class WordMap(object):
 	def from_lines(lines):
 		wordmap = WordMap(None)
 
-		word_lines = map(lambda x: r_words.findall(x), lines)
+		word_lines = map(lambda x: extract_words(x), lines)
 		for l in word_lines:
 			wordmap.add_many_words(l)
 
@@ -102,17 +102,18 @@ class WordMap(object):
 		if not words:
 			return map
 
-		for w in words:
+		for w in map(lambda x: x.lower(), words):
 			if w not in map:
 				map[w] = 1
 			else:
 				map[w] += 1
 
 	def add_word(self, word, n=1):
-		if word not in self.map:
-			self.map[word] = n
+		lword = word.lower()
+		if lword not in self.map:
+			self.map[lword] = n
 		else:
-			self.map[word] += n
+			self.map[lword] += n
 
 	def add_many_words(self, words):
 		for word in words:
@@ -129,5 +130,5 @@ class WordMap(object):
 		itself, giving a score of similarity to the word map's
 		provided data sets."""
 
-		return sum([self.map[w] for w in words if w in self.map])
+		return sum([self.map[w.lower()] for w in words if w in self.map])
 
