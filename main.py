@@ -21,25 +21,7 @@ def ctrlc_handler(signum, frame):
 	print
 	print "Control-C was pressed."
 	exit()
-	for username in users:
-		user_tweets = pull_top_tweets_for_user(\
-						api,\
-						username,\
-						NUM_TWEETS_PER_USER,\
-						TOP_TWEETS_PER_USER\
-					)
 
-		if user_tweets:
-			print "Successfully obtained user data for username: {}"\
-					.format(username)
-			tweets.extend(user_tweets)
-		else:
-			print "Failed to obtain user data for username: {}"\
-					.format(username)
-
-	print "Writing tweet data to {}...".format(output_file)
-
-	write_tweets(output_file, tweets)
 def read_lines_from_file(filename):
 	with open(filename) as f:
 		return f.readlines()
