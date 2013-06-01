@@ -7,3 +7,6 @@ assets/*
 # Temporaries
 *.pyc
 *~
+
+# Logs
+*.log

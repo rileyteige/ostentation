@@ -5,6 +5,8 @@ import re
 import simplejson as json
 import time
 
+from exception import *
+
 mention_pattern = r'(@\w+)'
 hashtag_pattern = r'(#\w+)'
 word_pattern = r'(\w\w*\'?\w?\w?)'
@@ -19,11 +21,26 @@ def rgx(expr):
 r_terms = rgx([mention_pattern, hashtag_pattern, url_pattern])
 r_words = rgx(word_pattern)
 
-def latin(expr):
-	if isinstance(expr, basestring):
-		return expr.encode('ascii', 'ignore')
-	elif isinstance(expr, list):
-		return [x.encode('ascii', 'ignore') for x in expr]
+def encode(string, to, error_behavior):
+	try:
+		return string.encode(to, error_behavior)
+	except:
+		raise TextConversionException(string, to)
+
+class StandardizingException(TwitterException): pass
+
+def standardize(expr):
+	convert_to = 'ascii'
+	error_behavior = 'ignore'
+
+	try:
+		if isinstance(expr, basestring):
+			return encode(expr, convert_to, error_behavior)
+		elif isinstance(expr, list):
+			return [encode(x, convert_to, error_behavior) for x in expr]
+	except TextConversionException as e:
+		e.log()
+		raise StandardizingException()
 
 def extract_words(line):
 	return r_words.findall(re.sub(r_terms, '', line))
@@ -38,12 +55,15 @@ class TweetEncoder(json.JSONEncoder):
 		return obj.__dict__
 
 class Tweet(object):
-	def __init__(self, username, status):
+	def __init__(self, username=None, status=None):
 		if not (username and status):
 			return
 
 		self.created_on = dateutil.parser.parse(status.GetCreatedAt())
-		self.text = status.GetText().encode('ascii', 'ignore')
+		try:
+			self.text = standardize(status.GetText())
+		except StandardizingException:
+			raise TweetException('Failed to standardize string format')
 		self.mentions = re.findall(mention_pattern, self.text)
 		self.hashtags = re.findall(hashtag_pattern, self.text)
 		self.words = extract_words(self.text)
@@ -52,22 +72,21 @@ class Tweet(object):
 
 	@staticmethod
 	def from_dict(d):
-		username = latin(d['username'])
-		text = latin(d['text'])
-		hashtags = latin(d['hashtags'])
-		created_on = datetime.datetime.fromtimestamp(d['created_on'])
-		words = latin(d['words'])
-		mentions = latin(d['mentions'])
-		retweet_count = d['retweet_count']
+		if not isinstance(d, dict):
+			raise TweetException('Bad dictionary')
 
-		t = Tweet(None, None)
-		t.username = username
-		t.text = text
-		t.hashtags = hashtags
-		t.created_on = created_on
-		t.words = words
-		t.mentions = mentions
-		t.retweet_count = retweet_count
+		t = Tweet()
+
+		try:
+			t.username = standardize(d['username'])
+			t.text = standardize(d['text'])
+			t.hashtags = standardize(d['hashtags'])
+			t.created_on = datetime.datetime.fromtimestamp(d['created_on'])
+			t.words = standardize(d['words'])
+			t.mentions = standardize(d['mentions'])
+			t.retweet_count = d['retweet_count']
+		except StandardizingException:
+			raise TweetException('Failed to standardize string format')
 
 		return t
 

@@ -1,21 +1,14 @@
 #!/usr/bin/env python
 import dateutil.parser
+import exception
 import json
 import os
 import signal
 import sys
 import twitter
 
+from exception import *
 from tweet import Tweet, TweetEncoder, WordMap
-
-class FileFormatException(Exception):
-	def __str__(self):
-		return "Bad file format in file '{}'".format(self.message)
-
-class UserException(Exception):
-	def __str__(self):
-		return "Failed to obtain user data for username: {}"\
-					.format(self.message)
 
 def ctrlc_handler(signum, frame):
 	print
@@ -36,7 +29,13 @@ def get_secrets(filename):
 	lines = read_lines_from_file(filename)
 	for l in lines:
 		pair = l.split('=')
-		k, v = pair[0], pair[1]
+		k = v = None
+
+		try:
+			k, v = pair[0], pair[1]
+		except IndexError:
+			raise FileFormatException(filename)
+
 		if k == KEY:
 			key = v
 		elif k == SECRET:
@@ -50,11 +49,12 @@ def get_secrets(filename):
 	return key, secret
 
 def load_twitter(consumer_file, oauth_token_file):
-	consumer_key, consumer_secret = get_secrets(consumer_file)
-	oauth_key, oauth_secret = get_secrets(oauth_token_file)
-
-	assert(consumer_key and consumer_secret)
-	assert(oauth_key and oauth_secret)
+	try:
+		consumer_key, consumer_secret = get_secrets(consumer_file)
+		oauth_key, oauth_secret = get_secrets(oauth_token_file)
+	except FileFormatException as e:
+		print "Could not load data from file {}".format(e.filename)
+		e.log(should_quit=True)
 
 	return twitter.Api(consumer_key=consumer_key,\
 						consumer_secret=consumer_secret,\
@@ -138,14 +138,20 @@ def load_tweets(api, username_file, load_file):
 		with open(load_file, 'r') as f:
 			json_data = f.read()
 			data = json.loads(json_data, encoding='latin1')
+
 			i = 0
 			for d in data:
 				i += 1
 				if i % 2000 == 0:
 					sys.stdout.write('.')
 					i = 0
-				tweet = Tweet.from_dict(d)
-				tweets.append(tweet)
+
+				try:
+					tweet = Tweet.from_dict(d)
+					tweets.append(tweet)
+				except TwitterException as e:
+					e.log()
+
 			print "\nDone.\n"
 
 	return tweets
@@ -156,7 +162,10 @@ def load_word_map(data_file):
 
 	return WordMap.from_lines(read_lines_from_file(data_file))
 
-def score_tweets(tweets):
+def rank_users(tweets):
+	if not tweets:
+		return None
+
 	narcisistic_file = 'assets/narcissistic.txt'
 	selfless_file = 'assets/selfless.txt'
 
@@ -173,10 +182,36 @@ def score_tweets(tweets):
 		words = t.words
 		user_scores[name] += narcisistic.score(words) - selfless.score(words)
 
-	return user_scores
+	return sorted(user_scores, key=user_scores.get, reverse=True)
+
+def post_rankings(rankings):
+	if not rankings:
+		print "No rankings to post."
+		return
+
+	n = len(rankings)
+
+	BOUNDARY_SIZE = 5
+	i = 0
+	if n < BOUNDARY_SIZE * 2:
+		print "\nIn order from most narcissistic to least:\n"
+		for name in rankings:
+			i += 1
+			print "{}: {}".format(i, name)
+	else:
+		print "{} most narcissistic users:\n".format(BOUNDARY_SIZE)
+		for name in rankings[:BOUNDARY_SIZE]:
+			i += 1
+			print "{}: {}".format(i, name)
+
+		print "\n{} least narcissistic users:\n".format(BOUNDARY_SIZE)
+		i = 0
+		for name in reversed(rankings[-BOUNDARY_SIZE:]):
+			i += 1
+			print "{}: {}".format(i, name)
+
 
 def main():
-
 	signal.signal(signal.SIGINT, ctrlc_handler)
 
 	consumer_file = 'secrets/consumerkeys.txt'
@@ -184,38 +219,37 @@ def main():
 	user_file = 'assets/top1000.data'
 	tweet_save_file = 'assets/tweets.json'
 
-	api = load_twitter(consumer_file, oauth_token_file)
-	tweets = load_tweets(api, user_file, tweet_save_file)
+	try:
+		api = load_twitter(consumer_file, oauth_token_file)
+		tweets = load_tweets(api, user_file, tweet_save_file)
+	except TwitterException as e:
+		print "Could not load tweets."
+		e.log(should_quit=True)
 
 	print "Loaded {} tweets.".format(len(tweets))
+	print "Analyzing twitter data...\n"
 
-	if tweets:
-		print "Analyzing twitter data...\n"
-		scores = score_tweets(tweets)
-		ranked_users = sorted(scores, key=scores.get, reverse=True)
-		n = len(ranked_users)
-		BOUNDARY_SIZE = 5
-		i = 0
-		if n < BOUNDARY_SIZE * 2:
-			print "\nIn order from most narcissistic to least:\n"
-			for name in ranked_users:
-				i += 1
-				print "{}: {}".format(i, name)
-		else:
-			print "{} most narcissistic users:\n".format(BOUNDARY_SIZE)
-			for name in ranked_users[:BOUNDARY_SIZE]:
-				i += 1
-				print "{}: {}".format(i, name)
-
-			print "\n{} least narcissistic users:\n".format(BOUNDARY_SIZE)
-			i = 0
-			for name in reversed(ranked_users[-BOUNDARY_SIZE:]):
-				i += 1
-				print "{}: {}".format(i, name)
-
-
-	else:
-		print "An error occurred loading the tweets."
+	try:
+		ranked_users = rank_users(tweets)
+		post_rankings(ranked_users)
+	except TwitterException as e:
+		print "Could not rank users."
+		e.log(should_quit=True)
 
 if __name__ == "__main__":
-	main()
+	sys.stdout = os.fdopen(sys.stdout.fileno(), 'w', 0)
+	sys.stderr = open(exception.error_filename, 'w', 0)
+
+	try:
+		main()
+	except Exception as e:
+		print "An unhandled exception occured."
+		log_exception(e, handled=False, should_quit=True)
+
+	errors = num_exceptions_encountered()
+	if errors > 0:
+		print "\n\n\n{} exceptions were handled during execution."\
+				.format(errors)
+	else:
+		sys.stderr.close()
+		os.remove(exception.error_filename)
