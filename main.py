@@ -63,11 +63,14 @@ def load_twitter(consumer_file, oauth_token_file):
 					)
 
 def load_users(user_file, n, offset=0):
+	if not os.path.exists(user_file):
+		raise FileNotFoundException(user_file)
+
 	lines = []
 	try:
 		lines = read_lines_from_file(user_file)
 	except:
-		print "Could not read user data from {}".format(user_file)
+		raise FileFormatException(user_file)
 
 	if not lines:
 		return None
@@ -87,11 +90,7 @@ def pull_top_tweets_for_user(api, username, n, top_count):
 	try:
 		statuses = api.GetUserTimeline(username, count=n+1)
 	except twitter.TwitterError as e:
-		print "\nA Twitter exception occurred:\n{}".format(e)
-		exit(1)
-	except:
-		print "An exception occurred getting status info."
-		return None
+		raise ApiException(str(e))
 
 	if not statuses:
 		return None
@@ -113,6 +112,7 @@ def load_tweets(api, username_file, load_file):
 		sys.stdout.write("Downloading twitter data " +\
 							"for {} users at {} tweets/user..."\
 							.format(NUM_USERS, TOP_TWEETS_PER_USER))
+
 		users = load_users(username_file, NUM_USERS)
 
 		for username in users:
@@ -223,7 +223,7 @@ def main():
 		api = load_twitter(consumer_file, oauth_token_file)
 		tweets = load_tweets(api, user_file, tweet_save_file)
 	except TwitterException as e:
-		print "Could not load tweets."
+		print "\nCould not load tweets."
 		e.log(should_quit=True)
 
 	print "Loaded {} tweets.".format(len(tweets))

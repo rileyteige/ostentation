@@ -49,13 +49,18 @@ class TwitterException(Exception):
 	def log(self, handled=True, should_quit=False):
 		log_exception(self, handled, should_quit)
 
-class FileFormatException(TwitterException):
+class FileException(TwitterException):
 	def __init__(self, filename):
-		super(FileFormatException, self).__init__()
+		super(FileException, self).__init__(filename)
 		self.filename = filename
 
+class FileFormatException(FileException):
 	def build_message(self):
 		return "Bad file format in file '{}'".format(self.filename)
+
+class FileNotFoundException(FileException):
+	def build_message(self):
+		return "Find not found: {}".format(self.filename)
 
 class UserException(TwitterException):
 	def __init__(self, message):
